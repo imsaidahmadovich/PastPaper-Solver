@@ -2,7 +2,6 @@
 
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { upload } from '@vercel/blob/client';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -154,7 +153,7 @@ function PaperForm({paperId}:{paperId?:string}) {
   const metadataFields:[keyof PaperInput,string,string][]=[['title','Paper title','e.g. GCSE Mathematics — Paper 1'],['subject','Subject','e.g. Mathematics'],['examBoard','Exam board','e.g. AQA'],['year','Year','2024'],['session','Session','June'],['paperNumber','Paper number','1']];
   const submitMeta=(e:FormEvent)=>{e.preventDefault();if(creating)create.mutate({data:form},{onSuccess:created=>{qc.invalidateQueries({queryKey:getListAdminPapersQueryKey()});navigate(`/admin/papers/${created.id}`);}});else update.mutate({paperId:paperId!,data:form},{onSuccess:()=>{qc.invalidateQueries({queryKey:getGetAdminPaperQueryKey(paperId!)});qc.invalidateQueries({queryKey:getListAdminPapersQueryKey()});setMessage('Paper details saved.');}});};
   const uploadAssets=async()=>{if(!files.qp||!files.ms||!paperId)return;setUploadBusy(true);setMessage('');try{
-    const uploadOne=async(file:File,kind:'qp'|'ms')=>{const filename=file.name.replace(/[^a-zA-Z0-9._-]+/g,'-').slice(-120);const blob=await upload(`pastpaper-solver/${paperId}/${kind}/${filename}`,file,{access:'private',handleUploadUrl:'/api/admin/blob-upload',clientPayload:JSON.stringify({paperId,kind})});return blob.pathname;};
+    const uploadOne=async(file:File,kind:'qp'|'ms')=>{const r=await fetch('/api/admin/blob-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({paperId,kind,filename:file.name,contentType:file.type,size:file.size})});const d=await r.json().catch(()=>null);if(!r.ok||!d?.url)throw new Error(d?.error||'Upload could not be authorized.');const form=new FormData();form.append('cacheControl','3600');form.append('',file);const put=await fetch(d.url,{method:'PUT',headers:{'x-upsert':'true'},body:form});if(!put.ok){const e=await put.json().catch(()=>null);throw new Error(e?.message||'File upload failed ('+put.status+').');}return d.pathname as string;};
     const [questionPaperPath,markSchemePath]=await Promise.all([uploadOne(files.qp,'qp'),uploadOne(files.ms,'ms')]);
     assets.mutate({paperId,data:{questionPaperPath,markSchemePath}},{onSuccess:()=>{setMessage('Both files uploaded and attached.');setFiles({qp:null,ms:null});qc.invalidateQueries({queryKey:getGetAdminPaperQueryKey(paperId)});},onError:e=>setMessage(errorText(e)),onSettled:()=>setUploadBusy(false)});
   }catch(e){setMessage(errorText(e));setUploadBusy(false);}};
