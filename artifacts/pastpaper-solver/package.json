@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port ${PORT:-3000}",
-    "build": "next build",
+    "build": "pnpm --dir ../.. run typecheck:libs && next build",
     "serve": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
