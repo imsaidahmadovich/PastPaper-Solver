@@ -1,0 +1,1 @@
+- [Next.js route migration](nextjs-route-migration.md) — remove stale or empty `src/pages` folders when deploying an App Router project.
