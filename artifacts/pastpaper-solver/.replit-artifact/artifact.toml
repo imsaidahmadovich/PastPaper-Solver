@@ -1,0 +1,32 @@
+kind = "web"
+previewPath = "/"
+title = "PastPaper Solver"
+description = "A past-paper exam practice platform where students browse published papers, practice with optional timers, save their progress locally, and receive AI-graded results. Administrators securely upload and process question papers and mark schemes."
+version = "1.0.0"
+id = "artifacts/pastpaper-solver"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26232
+
+[services.development]
+run = "pnpm --filter @workspace/pastpaper-solver run dev"
+
+[services.production.build]
+args = ["pnpm", "--filter", "@workspace/pastpaper-solver", "run", "build"]
+
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run]
+args = ["pnpm", "--filter", "@workspace/pastpaper-solver", "run", "serve"]
+
+[services.production.run.env]
+PORT = "26232"
+NODE_ENV = "production"
+
+[services.env]
+PORT = "26232"
+BASE_PATH = "/"

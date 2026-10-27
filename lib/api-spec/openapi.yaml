@@ -3,34 +3,600 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PastPaper Solver API
 servers:
   - url: /api
     description: Base API path
 tags:
-  - name: health
-    description: Health operations
+  - name: papers
+    description: Published past papers and student attempts
+  - name: admin
+    description: Protected paper management
 paths:
-  /healthz:
+  /papers:
     get:
-      operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
+      operationId: listPapers
+      tags: [papers]
+      summary: List published papers
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: subject
+          in: query
+          schema: { type: string }
+        - name: year
+          in: query
+          schema: { type: integer }
       responses:
         "200":
-          description: Healthy
+          description: Published papers
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaperSummary"
+  /papers/{paperId}:
+    get:
+      operationId: getPaper
+      tags: [papers]
+      summary: Get a paper for solving
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      responses:
+        "200":
+          description: Paper without answers or marks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicPaper"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /papers/{paperId}/submit:
+    post:
+      operationId: submitAttempt
+      tags: [papers]
+      summary: Submit and grade an attempt
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttemptInput"
+      responses:
+        "200":
+          description: Graded attempt results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttemptResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      tags: [admin]
+      summary: Check admin session
+      responses:
+        "200":
+          description: Session status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Log in as the administrator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: Invalid password
+        "429":
+          description: Too many login attempts
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      tags: [admin]
+      summary: End the admin session
+      responses:
+        "204":
+          description: Logged out
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [admin]
+      summary: Get admin overview metrics
+      security:
+        - AdminSessionCookie: []
+      responses:
+        "200":
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /admin/papers:
+    get:
+      operationId: listAdminPapers
+      tags: [admin]
+      summary: List all papers for administration
+      security:
+        - AdminSessionCookie: []
+      responses:
+        "200":
+          description: Paper list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminPaperSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createPaper
+      tags: [admin]
+      summary: Create a draft paper
+      security:
+        - AdminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperInput"
+      responses:
+        "201":
+          description: Draft paper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPaper"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+  /admin/papers/{paperId}:
+    get:
+      operationId: getAdminPaper
+      tags: [admin]
+      summary: Get a paper draft and its answer key
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      responses:
+        "200":
+          description: Full paper for administration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPaper"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updatePaper
+      tags: [admin]
+      summary: Update paper metadata
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperUpdate"
+      responses:
+        "200":
+          description: Updated paper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPaper"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+    delete:
+      operationId: deletePaper
+      tags: [admin]
+      summary: Delete a paper
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      responses:
+        "204":
+          description: Paper deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /admin/papers/{paperId}/assets:
+    put:
+      operationId: savePaperAssets
+      tags: [admin]
+      summary: Save uploaded file references
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperAssetsInput"
+      responses:
+        "200":
+          description: Saved asset metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperAssetsStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+  /admin/papers/{paperId}/process:
+    post:
+      operationId: processPaper
+      tags: [admin]
+      summary: Extract questions using the configured AI provider
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      responses:
+        "200":
+          description: Extracted question preview
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuestionInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+  /admin/papers/{paperId}/questions:
+    put:
+      operationId: savePaperQuestions
+      tags: [admin]
+      summary: Save edited extracted questions
+      security:
+        - AdminSessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/PaperId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/QuestionInput"
+      responses:
+        "200":
+          description: Saved questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminQuestion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
+  /admin/ai-settings:
+    get:
+      operationId: getAiSettings
+      tags: [admin]
+      summary: Get AI provider settings without revealing the key
+      security:
+        - AdminSessionCookie: []
+      responses:
+        "200":
+          description: Provider settings status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettingsStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: saveAiSettings
+      tags: [admin]
+      summary: Save encrypted AI provider settings
+      security:
+        - AdminSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSettingsInput"
+      responses:
+        "200":
+          description: Saved provider settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettingsStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/InvalidInput"
 components:
+  parameters:
+    PaperId:
+      name: paperId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Unauthorized:
+      description: Admin authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InvalidInput:
+      description: Invalid input or missing configuration
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  securitySchemes:
+    AdminSessionCookie:
+      type: apiKey
+      in: cookie
+      name: pps_admin_session
   schemas:
-    HealthStatus:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    PaperSummary:
+      type: object
+      required:
+        - id
+        - title
+        - subject
+        - examBoard
+        - year
+        - session
+        - paperNumber
+        - timeLimitMinutes
+        - questionCount
+        - totalMarks
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        subject: { type: string }
+        examBoard: { type: string }
+        year: { type: integer }
+        session: { type: string }
+        paperNumber: { type: string }
+        timeLimitMinutes: { type: ["integer", "null"] }
+        questionCount: { type: integer }
+        totalMarks: { type: integer }
+    PublicQuestion:
+      type: object
+      required: [id, questionNumber, text, kind, options]
+      properties:
+        id: { type: string, format: uuid }
+        questionNumber: { type: string }
+        text: { type: string }
+        kind: { type: string, enum: [written, mcq] }
+        options:
+          type: array
+          items: { type: string }
+    PublicPaper:
+      type: object
+      required: [id, title, subject, examBoard, year, session, paperNumber, timeLimitMinutes, questions]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        subject: { type: string }
+        examBoard: { type: string }
+        year: { type: integer }
+        session: { type: string }
+        paperNumber: { type: string }
+        timeLimitMinutes: { type: ["integer", "null"] }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicQuestion"
+    AttemptInput:
+      type: object
+      required: [answers, durationSeconds, timed]
+      properties:
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnswerInput"
+        durationSeconds: { type: integer, minimum: 0, maximum: 86400 }
+        timed: { type: boolean }
+    AnswerInput:
+      type: object
+      required: [questionId, answer]
+      properties:
+        questionId: { type: string, format: uuid }
+        answer: { type: string, maxLength: 10000 }
+    AttemptResult:
+      type: object
+      required: [attemptId, totalMarks, maxMarks, percentage, timeTakenSeconds, submittedAt, questions]
+      properties:
+        attemptId: { type: string, format: uuid }
+        totalMarks: { type: integer }
+        maxMarks: { type: integer }
+        percentage: { type: number }
+        timeTakenSeconds: { type: integer }
+        submittedAt: { type: string, format: date-time }
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionResult"
+    QuestionResult:
+      type: object
+      required: [questionId, questionNumber, questionText, userAnswer, correctAnswer, markingPoints, marksAwarded, maxMarks, explanation]
+      properties:
+        questionId: { type: string, format: uuid }
+        questionNumber: { type: string }
+        questionText: { type: string }
+        userAnswer: { type: string }
+        correctAnswer: { type: string }
+        markingPoints:
+          type: array
+          items: { type: string }
+        marksAwarded: { type: integer }
+        maxMarks: { type: integer }
+        explanation: { type: string }
+    AdminSession:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated: { type: boolean }
+    AdminLoginInput:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, minLength: 1, maxLength: 256 }
+    PaperInput:
+      type: object
+      required: [title, subject, examBoard, year, session, paperNumber]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 180 }
+        subject: { type: string, minLength: 1, maxLength: 100 }
+        examBoard: { type: string, minLength: 1, maxLength: 100 }
+        year: { type: integer, minimum: 1900, maximum: 2200 }
+        session: { type: string, minLength: 1, maxLength: 80 }
+        paperNumber: { type: string, minLength: 1, maxLength: 80 }
+        timeLimitMinutes: { type: ["integer", "null"], minimum: 1, maximum: 1440 }
+    PaperUpdate:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
+        title: { type: string, minLength: 1, maxLength: 180 }
+        subject: { type: string, minLength: 1, maxLength: 100 }
+        examBoard: { type: string, minLength: 1, maxLength: 100 }
+        year: { type: integer, minimum: 1900, maximum: 2200 }
+        session: { type: string, minLength: 1, maxLength: 80 }
+        paperNumber: { type: string, minLength: 1, maxLength: 80 }
+        timeLimitMinutes: { type: ["integer", "null"], minimum: 1, maximum: 1440 }
+        isPublished: { type: boolean }
+    PaperAssetsInput:
+      type: object
+      required: [questionPaperPath, markSchemePath]
+      properties:
+        questionPaperPath: { type: string, minLength: 1, maxLength: 500 }
+        markSchemePath: { type: string, minLength: 1, maxLength: 500 }
+    PaperAssetsStatus:
+      type: object
+      required: [hasQuestionPaper, hasMarkScheme]
+      properties:
+        hasQuestionPaper: { type: boolean }
+        hasMarkScheme: { type: boolean }
+    QuestionInput:
+      type: object
+      required: [questionNumber, text, marks, kind, options, correctAnswer, markingPoints]
+      properties:
+        questionNumber: { type: string, minLength: 1, maxLength: 50 }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+        marks: { type: integer, minimum: 0, maximum: 100 }
+        kind: { type: string, enum: [written, mcq] }
+        options:
+          type: array
+          items: { type: string, maxLength: 1000 }
+        correctAnswer: { type: string, maxLength: 10000 }
+        markingPoints:
+          type: array
+          items: { type: string, maxLength: 2000 }
+    AdminQuestion:
+      allOf:
+        - $ref: "#/components/schemas/QuestionInput"
+        - type: object
+          required: [id, position]
+          properties:
+            id: { type: string, format: uuid }
+            position: { type: integer, minimum: 0 }
+    AdminPaperSummary:
+      allOf:
+        - $ref: "#/components/schemas/PaperSummary"
+        - type: object
+          required: [isPublished, hasQuestionPaper, hasMarkScheme]
+          properties:
+            isPublished: { type: boolean }
+            hasQuestionPaper: { type: boolean }
+            hasMarkScheme: { type: boolean }
+    AdminPaper:
+      allOf:
+        - $ref: "#/components/schemas/AdminPaperSummary"
+        - type: object
+          required: [questions]
+          properties:
+            questions:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminQuestion"
+    AiSettingsInput:
+      type: object
+      required: [provider, model]
+      properties:
+        provider: { type: string, enum: [openai, anthropic, gemini] }
+        model: { type: string, minLength: 1, maxLength: 150 }
+        apiKey: { type: string, maxLength: 500, description: Omit to keep the currently stored key }
+    AiSettingsStatus:
+      type: object
+      required: [provider, model, isConfigured]
+      properties:
+        provider: { type: string, enum: [openai, anthropic, gemini] }
+        model: { type: string }
+        isConfigured: { type: boolean }
+    AdminDashboard:
+      type: object
+      required: [totalPapers, publishedPapers, totalAttempts, averageScore]
+      properties:
+        totalPapers: { type: integer }
+        publishedPapers: { type: integer }
+        totalAttempts: { type: integer }
+        averageScore: { type: number }
 
