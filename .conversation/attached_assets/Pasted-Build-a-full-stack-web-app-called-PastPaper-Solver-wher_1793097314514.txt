@@ -1,0 +1,37 @@
+Build a full-stack web app called "PastPaper Solver" where students practice past exam papers, with a separate admin area for managing papers.
+
+## Roles
+1. Standard user (no login): can only browse and solve past papers.
+2. Admin: logs in at /admin using a single password. The password is "@dmin123c". Validate it SERVER-SIDE only (store it as an environment variable ADMIN_PASSWORD, never in frontend code). On success, issue a session cookie or JWT (httpOnly). Rate-limit login attempts.
+
+## Admin page (/admin, password protected)
+- Login screen with a password field only.
+- Dashboard with these controls:
+  1. "Upload QP" button: upload the question paper (PDF or images).
+  2. "Upload MS" button: upload the mark scheme (PDF or images).
+  3. "AI API" button: opens a settings panel where the admin pastes an AI API key and picks a provider/model. Store the key server-side (encrypted or in env/DB), never expose it to the browser.
+- After QP and MS are uploaded, the admin clicks "Process with AI". The AI reads both files and extracts structured questions: question number, question text, marks, and the correct answer / marking points from the MS. Show a preview where the admin can edit or fix any question before publishing.
+- Paper metadata form: title, subject, exam board, year, session, paper number.
+- Time setting: the admin sets the time limit for each paper (in minutes). Option to set "no time limit available".
+- Publish / unpublish / delete papers.
+
+## Standard user pages
+- Home: a clean list of all published past papers (title, subject, year, duration, number of questions, total marks) with search and filter by subject/year.
+- Clicking a paper opens a start screen with a choice:
+  - "Start with timer" (uses the admin-set time, shows a countdown, auto-submits at 0:00)
+  - "Start without timer" (no countdown)
+- Solving screen: one question at a time (or scrollable list) with a question navigator, the user types answers (or selects options for MCQ), can flag questions, and can go back and forth. Autosave answers locally in case of refresh.
+- Submit button, with a confirmation prompt.
+- Results shown ONLY at the end, after submission: total score, percentage, time taken, per-question breakdown with the user's answer, the correct answer / mark scheme points, and marks awarded. Use the AI API (server-side) to grade written answers against the mark scheme, with a short explanation per question. MCQs are auto-graded.
+- Users must not see answers or marks while solving.
+
+## Technical requirements
+- Stack: Next.js (App Router) + Tailwind CSS, with API routes. Use PostgreSQL or SQLite (Prisma) for papers, questions, and attempts.
+- File storage for uploaded QP/MS files.
+- All admin API routes check authentication. AI calls happen only on the server.
+- Fully responsive, mobile-friendly, clean modern UI, with dark mode.
+- Loading states, error handling, and validation on all forms and uploads (file type and size limits).
+- Include a README with setup steps, environment variables (ADMIN_PASSWORD, AI_API_KEY, DATABASE_URL, SESSION_SECRET), and deployment instructions.
+
+## Deliverables
+Complete working code, folder structure, database schema, and step-by-step run instructions.
