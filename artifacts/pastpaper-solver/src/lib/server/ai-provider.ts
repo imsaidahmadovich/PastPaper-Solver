@@ -9,6 +9,17 @@ function dataUrl(file: AiAttachment): string {
   return `data:${file.contentType};base64,${file.data.toString("base64")}`;
 }
 
+// Retries short provider hiccups (overloaded / temporary server errors) a couple of times.
+async function fetchRetry(url: string, init: RequestInit): Promise<Response> {
+  let res = await fetch(url, init);
+  for (const wait of [4000, 8000]) {
+    if (![500, 502, 503].includes(res.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    res = await fetch(url, init);
+  }
+  return res;
+}
+
 async function providerRequest(
   provider: AiProvider,
   model: string,
@@ -16,7 +27,7 @@ async function providerRequest(
   prompt: string,
   attachments: AiAttachment[] = [],
 ): Promise<string> {
-  const signal = AbortSignal.timeout(500_000);
+  const signal = AbortSignal.timeout(270_000);
   let response: Response;
 
   if (provider === "openai" && apiKey.startsWith("sk-or-")) {
@@ -30,7 +41,7 @@ async function providerRequest(
           : { type: "image_url", image_url: { url: dataUrl(file) } },
       ),
     ];
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    response = await fetchRetry("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -63,7 +74,7 @@ async function providerRequest(
               },
         ),
       ];
-      response = await fetch("https://api.openai.com/v1/responses", {
+      response = await fetchRetry("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -80,7 +91,7 @@ async function providerRequest(
           image_url: { url: dataUrl(file), detail: "high" },
         })),
       ];
-      response = await fetch("https://api.openai.com/v1/chat/completions", {
+      response = await fetchRetry("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,
@@ -116,7 +127,7 @@ async function providerRequest(
       ),
       { type: "text", text: prompt },
     ];
-    response = await fetch("https://api.anthropic.com/v1/messages", {
+    response = await fetchRetry("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": apiKey,
@@ -136,7 +147,7 @@ async function providerRequest(
         },
       })),
     ];
-    response = await fetch(
+    response = await fetchRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: "POST",
@@ -146,7 +157,12 @@ async function providerRequest(
         },
         body: JSON.stringify({
           contents: [{ role: "user", parts }],
-          generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            // Turn off slow "thinking" on 2.5 Flash / Flash-Lite so extraction finishes quickly.
+            ...(/gemini-2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          },
         }),
         signal,
       },
