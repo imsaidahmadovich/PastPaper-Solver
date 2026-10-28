@@ -16,7 +16,7 @@ async function providerRequest(
   prompt: string,
   attachments: AiAttachment[] = [],
 ): Promise<string> {
-  const signal = AbortSignal.timeout(270_000);
+  const signal = AbortSignal.timeout(500_000);
   let response: Response;
 
   if (provider === "openai" && apiKey.startsWith("sk-or-")) {
