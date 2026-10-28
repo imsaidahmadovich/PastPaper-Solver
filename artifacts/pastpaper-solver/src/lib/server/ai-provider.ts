@@ -19,7 +19,32 @@ async function providerRequest(
   const signal = AbortSignal.timeout(90_000);
   let response: Response;
 
-  if (provider === "openai") {
+  if (provider === "openai" && apiKey.startsWith("sk-or-")) {
+    // OpenRouter (OpenAI-compatible). PDFs are parsed by OpenRouter's free text engine,
+    // so this works with any model, including free ones.
+    const content = [
+      { type: "text", text: prompt },
+      ...attachments.map((file) =>
+        file.contentType === "application/pdf"
+          ? { type: "file", file: { filename: file.name, file_data: dataUrl(file) } }
+          : { type: "image_url", image_url: { url: dataUrl(file) } },
+      ),
+    ];
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "X-Title": "PastPaper Solver",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content }],
+        plugins: [{ id: "file-parser", pdf: { engine: "pdf-text" } }],
+      }),
+      signal,
+    });
+  } else if (provider === "openai") {
     const hasPdf = attachments.some((file) => file.contentType === "application/pdf");
     if (hasPdf) {
       const content = [
@@ -62,7 +87,6 @@ async function providerRequest(
         },
         body: JSON.stringify({
           model,
-          temperature: 0.1,
           messages: [{ role: "user", content }],
         }),
         signal,
@@ -98,7 +122,7 @@ async function providerRequest(
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({ model, max_tokens: 7000, temperature: 0.1, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 7000, messages: [{ role: "user", content }] }),
       signal,
     });
   } else {
@@ -129,7 +153,12 @@ async function providerRequest(
   }
 
   if (!response.ok) {
-    throw new Error(`The AI provider returned an error (${response.status}). Check the provider, model, and API key in AI settings.`);
+    const detail = (await response.json().catch(() => null)) as Record<string, any> | null;
+    const raw = detail?.error?.message ?? detail?.error ?? detail?.message ?? "";
+    const reason = (typeof raw === "string" ? raw : JSON.stringify(raw)).slice(0, 300);
+    throw new Error(
+      `The AI provider returned an error (${response.status}). ${reason || "Check the provider, model, and API key in AI settings."}`,
+    );
   }
 
   const result = (await response.json()) as Record<string, any>;
