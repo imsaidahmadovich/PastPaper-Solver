@@ -41,6 +41,7 @@ async function providerRequest(
         model,
         messages: [{ role: "user", content }],
         plugins: [{ id: "file-parser", pdf: { engine: "pdf-text" } }],
+        response_format: { type: "json_object" },
       }),
       signal,
     });
@@ -178,6 +179,60 @@ async function providerRequest(
   throw new Error("The AI provider returned an empty response.");
 }
 
+function tryParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+// Fixes common model mistakes inside JSON strings: raw newlines, invalid backslashes, trailing commas.
+function sanitize(text: string): string {
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (!inString) {
+      if (c === '"') inString = true;
+      out += c;
+      continue;
+    }
+    if (c === "\\") {
+      const next = text[i + 1];
+      if (next && '"\\/bfnrtu'.includes(next)) {
+        out += c + next;
+        i++;
+      } else {
+        out += "\\\\";
+      }
+    } else if (c === '"') {
+      inString = false;
+      out += c;
+    } else if (c === "\n") out += "\\n";
+    else if (c === "\t") out += "\\t";
+    else if (c === "\r") continue;
+    else out += c;
+  }
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
+
+// If the reply was cut off, keep every complete question that arrived.
+function salvage(text: string): unknown {
+  const body = sanitize(text);
+  let end = body.length;
+  for (let attempt = 0; attempt < 400; attempt++) {
+    end = body.lastIndexOf("}", end - 1);
+    if (end < 0) break;
+    const head = body.slice(0, end + 1);
+    for (const tail of ["", "]}", "]"]) {
+      const value = tryParse(head + tail);
+      if (value && typeof value === "object") return value;
+    }
+  }
+  return undefined;
+}
+
 export async function requestAiJson<T>(
   provider: AiProvider,
   model: string,
@@ -186,13 +241,22 @@ export async function requestAiJson<T>(
   attachments: AiAttachment[] = [],
 ): Promise<T> {
   const output = await providerRequest(provider, model, apiKey, prompt, attachments);
-  const trimmed = output.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  const json = start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
-  try {
-    return JSON.parse(json) as T;
-  } catch {
-    throw new Error("The AI response could not be read as structured JSON. Try the process again or choose a different model.");
+  const cleaned = output.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  const start = cleaned.search(/[{[]/);
+  const candidate = start >= 0 ? cleaned.slice(start) : cleaned;
+  const closer = candidate.startsWith("[") ? "]" : "}";
+  const trimmed = candidate.slice(0, candidate.lastIndexOf(closer) + 1);
+  const attempts = [
+    () => tryParse(trimmed),
+    () => tryParse(sanitize(trimmed)),
+    () => salvage(candidate),
+  ];
+  for (const attempt of attempts) {
+    const value = attempt();
+    if (value && typeof value === "object") return value as T;
   }
+  const preview = output.trim().replace(/\s+/g, " ").slice(0, 160);
+  throw new Error(
+    `The AI response could not be read as structured JSON. Try again or choose a different model. The reply started with: "${preview}"`,
+  );
 }
