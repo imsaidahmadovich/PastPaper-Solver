@@ -38,7 +38,7 @@ import { requestAiJson } from "@/lib/server/ai-provider";
 import { loadAiSettings, publicAiSettings } from "@/lib/server/ai-settings";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const extractedQuestion = {
   questionNumber: (value: unknown): value is string =>
